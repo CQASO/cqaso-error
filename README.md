@@ -13,7 +13,7 @@
 
 ## 使用
 
-工具使用umd模块格式，可在`amd`, `commonjs`模块环境下使用，建议异步获取js 通过 `<script>`标签全局变量使用。
+工具使用umd模块格式，可在`amd`, `commonjs`模块环境下使用
 
 > CqError.error()
 
