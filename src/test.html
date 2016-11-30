@@ -1,0 +1,20 @@
+<html>
+
+    <script src="../dist/index.js"></script>
+    <script>
+    try {
+        throw new Error('msg');
+    } catch (err) {
+        let error;
+        function a() {
+            error = CqError.error(err);
+        }
+
+        function b() {
+            a();
+        }
+        b();
+        console.log(error);
+    }
+    </script>
+</html>
