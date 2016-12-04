@@ -89,11 +89,14 @@ const Err = {
      autorun(cb);
  }
 
- window.onerror = function(message, file, line, column) {
-     error('global', message, file, line, column);
-     // 返回 `false` 则不捕获异常，浏览器控制台显示异常信息。
-     return false;
- };
+ Err.catchGlobal = function () {
+     window.onerror = function(message, file, line, column) {
+         error('global', message, file, line, column);
+         // 返回 `false` 则不捕获异常，浏览器控制台显示异常信息。
+         return false;
+     };
+ }
+
 
 export default Err;
 
