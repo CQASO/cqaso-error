@@ -15,16 +15,32 @@
 
 工具使用umd模块格式，可在`amd`, `commonjs`模块环境下使用
 
-> CqError.error()
+初始化:
 
-记录前端catch捕获到的错误
+```javascript
+window.CqError = [];
+CqError.push(['_init', {
+    callback: (err) => {
+        console.log(err);
+    },
+}]);
+```
 
-> CqError.watch(callback)
 
-捕获异常后，自动触发回调
+记录前端catch捕获到的错误:
 
-> CqError.catchGlobal()
+```javascript
+CqError.push(['_trackCatched', error]);
+// 或
+CqError.push(['_trackCatched', error, arguments.callee]);
+```
 
-捕获全局错误
 
-注意：`catchGlobal` 的方案会采集到全面的浏览器报错，但是太全了，出了`script error` 问题，还会采集到。谨慎使用
+捕获全局错误:
+
+```javascript
+CqError.push(['_trackGolbal']);
+```
+## 提示
+- `CqError.push(['_trackGolbal']);` 的方案会采集到全面的浏览器报错，但是太全了，这里过滤了`script error` 问题(跨域的js出错问题捕获不到，都是`script error`)
+- 建议异步加载js，和谷歌统计的js api风格一样
