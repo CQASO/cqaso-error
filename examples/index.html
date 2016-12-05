@@ -19,7 +19,7 @@
     }]);
     CqError.push(['_trackGolbal']);
 
-    loadScript('./index.js', () => {
+    loadScript('./__build__/index.js', () => {
         throw new Error('msg');
     });
 
