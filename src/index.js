@@ -8,97 +8,139 @@
  * 		- 收集cqaso前端未捕获的全局错误
  * 		- 业务逻辑中 catch 捕获住了抛出 JavaScript 异常
  *   	- 记录出错上下文的函数调用栈
+ *
+ * 用法:
+ *   window.CqError = [];
+ *   CqError.push(['_init', {
+ *      callback: (err) => {},
+ *   }]);
+ *   CqError.push(['_trackCatched', error]);
+ *   CqError.push(['_trackGolbal']);
+ *
  */
-
-import {observable, autorun} from './observable.js';
 
 // 全局变量
 const LOG = 'log';
+
+// 用于缓存识别同一个异常。
+const ERROR_CACHE = {};
+
+// 错误栈深度
+const MAX_STACKTRACE_DEEP = 20;
+
 const Err = {
-    datas: []
+    datas: [],
+    options: {
+        callback: () => {}
+    }
 };
 
-/* ------------------------------------
- * 主函数
- * ------------------------------------ */
+/**
+   * 初始化配置
+   * @param  {Function} callback 回调函数
+   * @return {undefined}
+   */
+Err._init = function(options) {
+    if (!_isObjByType(options)) {
+        throw new Error('_init config should be object');
+    }
 
- const observable_error = observable({data: null});
+    Object.assign(this.options, options);
+}
 
- /**
+/**
    * 监控接口
    * @param  {Object, String} detail  监控信息详情
    * @param  {String} type 监控类型
    * @return {Object}
    */
- Err.log = function(detail, type) {
-     if (!detail)
-         return;
+Err._log = function(detail, type) {
+    if (!detail)
+        return;
 
-     let data;
-     if (Object.prototype.toString.call(detail) === '[object Object]') {
-         data = detail;
-         data.type = type || data.type || LOG;
-     } else {
-         data = {
-             type: type || LOG,
-             msg: detail
-         };
-     }
+    let data;
+    if (Object.prototype.toString.call(detail) === '[object Object]') {
+        data = detail;
+        data.type = type || data.type || LOG;
+    } else {
+        data = {
+            type: type || LOG,
+            msg: detail
+        };
+    }
 
-     Err.datas.push(data);
-     observable_error.data = data;
-     return data;
- };
+    Err.datas.push(data);
+    Err.options.callback(data);
+    return data;
+};
 
- /**
+/**
    * JavaScript 异常接口，用于监控 `try/catch` 中被捕获的异常。
    * @param  {Error} err JavaScript 异常对象
    * @return {Object}
    */
- Err.error = function(err) {
-     if (!(err instanceof Error))
-         return;
+Err._trackCatched = function(err, fn) {
+    if (!(err instanceof Error))
+        return;
 
-     return error(
-         'catched',
-         err.message || err.description,
-         err.filename || err.fileName || err.sourceURL,
-         err.lineno || err.lineNumber || err.line,
-         err.colno || err.columnNumber,
-         err.number,
-         err.stack || err.stacktrace
-     );
- };
+    return error(
+        'catched',
+        err.message || err.description,
+        err.filename || err.fileName || err.sourceURL,
+        err.lineno || err.lineNumber || err.line,
+        err.colno || err.columnNumber,
+        fn ? stacktrace(fn) : err.stack || err.stacktrace,
+    );
+};
 
- /**
-   * 注册错误发生后的回调函数
-   * @param  {Function} callback 回调函数
-   * @return {undefined}
-   */
- Err.watch = function(callback) {
-     let called = false;
-     function cb() {
-         const msg = observable_error.data;
-         if (called) {
-             callback(msg);
-         } else {
-             called = true;
-         }
-     }
+Err._trackGolbal = function() {
+    window.onerror = function(message, file, line, column) {
+        // 过滤浏览器的跨域问题不能获得外链 javascript 的错误
+        if (/Script error/i.test(message))
+            return false;
 
-     autorun(cb);
- }
+        error('global', message, file, line, column);
 
- Err.catchGlobal = function () {
-     window.onerror = function(message, file, line, column) {
-         error('global', message, file, line, column);
-         // 返回 `false` 则不捕获异常，浏览器控制台显示异常信息。
-         return false;
-     };
- }
+        // 返回 `false` 则不捕获异常，浏览器控制台显示异常信息。
+        return false;
+    };
+};
 
+/* ------------------------------------
+  * 主程序
+  * ------------------------------------ */
 
-export default Err;
+(function () {
+    if (!_isObjByType(CqError, 'Array')) {
+        throw new Error('CqError is not Array.');
+    }
+
+    for (let i = 0; i < CqError.length; i++) {
+        executeErr(CqError[i]);
+    }
+
+    // 重写CqError.push方法
+    CqError.push = function (params) {
+        Array.prototype.push.call(CqError, params);
+        executeErr(params);
+    };
+
+    function executeErr(value) {
+        if (_isObjByType(value, 'Array')) {
+
+            // 如果传过来的是数组
+            const [methodName, ...args] = value;
+            if (Err[methodName]) {
+                Err[methodName](...args);
+            }
+        } else if (_isObjByType(value, 'String')) {
+            // 如果传过来的是字符串
+            if (!Err[value]) {
+                Err[value](...args);
+            }
+        }
+    }
+}());
 
 /* ------------------------------------
  * 私有函数
@@ -120,8 +162,6 @@ function function_name(fn) {
         : 'anonymous';
 }
 
-const MAX_STACKTRACE_DEEP = 20;
-
 /**
  * 函数调用堆栈
  * @param  {fn} fn function's caller
@@ -133,6 +173,7 @@ function stacktrace(fn) {
     let deep = 0;
     let call = fn;
     let caller = call.caller;
+    stack.push('at ' + function_name(call));
     while (caller) {
         try {
             call = call.caller;
@@ -155,9 +196,6 @@ function stacktrace(fn) {
     return stack.join('\n');
 }
 
-// 用于缓存识别同一个异常。
-const ERROR_CACHE = {};
-
 /**
  * JavaScript 异常统一处理函数
  * @param  {String} catchType 捕获异常的类型。
@@ -169,12 +207,7 @@ const ERROR_CACHE = {};
  * @return {Object}
  */
 function error(catchType, message, file, line, column, stack) {
-    if (!stack && arguments.callee.caller) {
-        stack = stacktrace(arguments.callee.caller);
-    }
-
     const data = {
-        profile: LOG,
         type: catchType,
         msg: message || '',
         file: file || '',
@@ -188,5 +221,9 @@ function error(catchType, message, file, line, column, stack) {
         ERROR_CACHE[key] = true;
     }
 
-    return Err.log(data);
+    return Err._log(data);
+}
+
+function _isObjByType(o, type) {
+    return Object.prototype.toString.call(o) === '[object ' + (type || 'Object') + ']';
 }

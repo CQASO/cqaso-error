@@ -9,7 +9,8 @@
     "clean": "rm -rf dist/",
     "transpile": "node --harmony ./bin/build.js",
     "minify": "uglifyjs $npm_package_main -cm -o $npm_package_minified_main",
-    "test": "karma start"
+    "test": "karma start",
+    "start": "webpack -w"
   },
   "devDependencies": {
     "babel-core": "^6.18.2",
